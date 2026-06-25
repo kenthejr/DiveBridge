@@ -23,11 +23,31 @@ cookie), NOT the `a21.php` app API. Direct submission is viable.
 - Pre-check: `POST .../code/process/ajax_divelog_validate_dive_number.php` (same
   field set, returns JSON) validates `odin_user_log_dive_nr` availability.
 
-## Dive-site resolution (confirmed)
+## Dive-site resolution (confirmed) — it's a SEARCH, not a dropdown
 - `GET .../code/geo/dive_site.json.sd.php?minlat&minlng&maxlat&maxlng&latitude&
-  longitude` → sites in a bounding box. Pick `odin_user_log_dive_sites_id`.
-- `GET .../code/process/ajax_divearea_getAll.php` → dive areas (JSON).
-- `dive_site_bow` (body of water) e.g. `fresh`.
+  longitude` → `{"markers":[ {f,n,m,t,la,lo,p,lck,ld,d,otype}, … ]}` where:
+  - **`f` = dive site id** → this is `odin_user_log_dive_sites_id`.
+  - `n` = name, `la`/`lo` = lat/lon, `lck`=1 (locked site), `otype`=`site_locked`.
+  - Cozumel bbox returned 81 markers; **Folsom returned `{"markers":[]}`**.
+- **Resolution flow:** dive GPS (from enrichment/Garmin/manual; Perdix has none) →
+  bbox around it → query endpoint → choose nearest / name-matching marker → use `f`.
+  - **Fallback when empty** (no SSI-registered site, e.g. Folsom): widen bbox / let
+    user pick a nearby site, or submit with site blank + put the location name in
+    `comment`. Don't fabricate a site id. (Creating a new SSI site is out of scope.)
+  - Text/address search in the UI uses Google geocoding (`maps.googleapis.com`) →
+    coords → same endpoint; `searchSite`/`adr` form fields feed that. `dive_site_bow`
+    = body of water (e.g. `fresh`).
+- `ds_infowindow_sd.php` returns a site info popup (needs more than just an id;
+  returned ERROR with id alone — not needed, we have `f`).
+- `ajax_divearea_getAll.php` → big **region polygons** (WKT), not individual sites;
+  not used for resolution.
+
+## Other "search" fields
+- **Buddies** (`odin_user_log_buddy_ids[]`) and **facility** (`log_linked_facility_id`)
+  render in the add form as selects pre-populated with the ACCOUNT's existing
+  buddies/facilities — so DiveBridge matches a buddy by name against that account
+  list (fetched live). Searching the *global* SSI member/facility DB to add a NEW
+  buddy is a separate edge case (defer).
 
 ## Field map (key fields → core::Dive)
 - Date/time: `date_sel2_dd / _mm / _yy`, `odin_user_log_entry_time` ("HH:MM").
