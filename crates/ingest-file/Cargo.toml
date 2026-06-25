@@ -9,4 +9,5 @@ description = "Parse UDDF/XML/CSV dive exports into core::Dive."
 [dependencies]
 divebridge-core.workspace = true
 thiserror.workspace = true
-# quick-xml = { version = "0.36", features = ["serialize"] }  # added in Spike 3
+chrono.workspace = true
+quick-xml = { version = "0.37", features = ["serialize"] }

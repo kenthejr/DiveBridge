@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uddf version="3.2.3" xmlns="https://www.streit.cc/resources/UDDF/v3.2.3/de/index.html">
+  <diver>
+    <owner id="owner1">
+      <personal>
+        <firstname>John</firstname>
+        <lastname>Doe</lastname>
+      </personal>
+    </owner>
+  </diver>
+  
+  <gasdefinitions>
+    <mix id="air">
+      <name>Air</name>
+      <o2>0.21</o2>
+      <n2>0.79</n2>
+    </mix>
+    <mix id="nitrox32">
+      <name>Nitrox 32</name>
+      <o2>0.32</o2>
+      <n2>0.68</n2>
+    </mix>
+  </gasdefinitions>
+
+  <profiledata>
+    <repetitiongroup id="rg1">
+      <dive id="dive1">
+        <informationbeforedive>
+          <datetime>2024-01-15T10:00:00Z</datetime>
+        </informationbeforedive>
+        <informationafterdive>
+          <diveduration>3600</diveduration>
+          <greatestdepth>30.5</greatestdepth>
+          <problems>none</problems>
+          <problems>equalisation</problems>
+          <program>recreation</program>
+        </informationafterdive>
+        <tankdata id="tank1">
+          <tankpressurebegin>200</tankpressurebegin>
+          <tankpressureend>50</tankpressureend>
+        </tankdata>
+      </dive>
+    </repetitiongroup>
+  </profiledata>
+
+  <tablegeneration>
+  </tablegeneration>
+</uddf>

@@ -39,3 +39,13 @@
 ## Pending (Round 2 — after Spike 1)
 SSI field mapping specifics, dive-site resolution endpoint, sync idempotency on
 re-upload (update vs new), credential/token storage location, batch-failure UX.
+
+## Pending core revisions (deliberate, not ad-hoc)
+- **Tank begin/end pressure has no home.** Spike 3 found Shearwater `<tankdata>`
+  carries `tankpressurebegin/end` (Pa→bar) but `core` has nowhere to put them, and
+  these waypoints have no per-sample pressure → values currently dropped. SSI needs
+  `pressure_start_bar`/`pressure_end_bar`, so add a `TankData`/begin-end field to
+  `SourceRecording` (and surface in `DiveSummary`). Do as one focused core change
+  before `ssi-api` mapping. (`pa_to_bar` already implemented in ingest-file.)
+- CCR setpoint derivation from `divemode`/`calculatedpo2` (Sample.setpoint).
+- Surface-event splitting (depth < 0.5 m for > 20 s) — one segment per dive today.
