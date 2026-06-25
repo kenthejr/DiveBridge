@@ -36,9 +36,25 @@
     + Garmin Mk3i) and time-merge. One `primary_source` for the canonical profile.
     Garmin/Swift ingestion **deferred** behind the seam.
 
-## Pending (Round 2 — after Spike 1)
-SSI field mapping specifics, dive-site resolution endpoint, sync idempotency on
-re-upload (update vs new), credential/token storage location, batch-failure UX.
+## SSI mapping (locked from Spike 1 + Ken)
+- **SSI `dive_nr` ≠ computer dive number.** It's the SSI logbook sequence and will
+  almost never match the Perdix number (esp. a new computer). Map: compute next SSI
+  number via read-back (`a21.php get_divelog` max+1) or let the user set it; keep
+  `computer_dive_number` only in provenance.
+- **Test-dive safety:** never set `log_linked_facility_id` / dive-center fields on
+  test submissions, so no affiliated center is notified.
+- **Auth for create = session cookie** (likely `PHPSESSID`) on my.divessi.com; SSO
+  login (`rest.divessi.com/sso/login`) uses an `x-ssi-auth` header. For early
+  testing, use a **session-cookie handoff** (Ken pastes the `cookie:` header into a
+  scratchpad file) rather than implementing/storing login.
+- **Dropdown vocabularies not in the HAR** (only selected values captured). Get full
+  `var_*` option tables by fetching `mydivelog/add` with a live session, or from a
+  mobile-app capture. See docs/api-capture.md.
+
+## Pending (Round 2 — remaining)
+Credential/token storage location (post-testing), sync idempotency on re-upload
+(update vs new), batch-failure UX, and whether to attach the dive-computer profile
+(`diveComputerData_ue`) — pending a mobile-app capture.
 
 ## Pending core revisions (deliberate, not ad-hoc)
 - **Tank begin/end pressure has no home.** Spike 3 found Shearwater `<tankdata>`
