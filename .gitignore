@@ -1,0 +1,19 @@
+/target
+**/target
+Cargo.lock.bak
+
+# Tauri / node (added later)
+node_modules/
+ui/build/
+ui/.svelte-kit/
+src-tauri/target/
+
+# Local data / secrets — never commit dive data or credentials
+/data/
+*.local
+.env
+.env.*
+divebridge.session
+
+# OS
+.DS_Store

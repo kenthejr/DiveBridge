@@ -1,0 +1,12 @@
+[package]
+name = "divebridge-ssi-browser"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Browser-based SSI capture (discovery) + deterministic replay fallback."
+
+[dependencies]
+divebridge-core.workspace = true
+thiserror.workspace = true
+# chromiumoxide = "0.7"   # capture/discovery; thirtyfour for runtime fallback

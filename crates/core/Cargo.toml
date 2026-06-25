@@ -1,0 +1,15 @@
+[package]
+name = "divebridge-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "DiveBridge core domain model: dives, segments, sources, classification, sync."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
