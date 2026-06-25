@@ -7,7 +7,7 @@
 //!       surface intervals) merged into one logical dive, and
 //!     * cross-device — the same submersion recorded by multiple computers
 //!       (e.g. Perdix 2 + Garmin Mk3i).
-//!   One source is the `primary_source` used for the canonical profile/graphs.
+//! - One source is the `primary_source` used for the canonical profile/graphs.
 //! - Raw layer (`SourceRecording`, including the verbatim `original_artifact`)
 //!   is IMMUTABLE and verifiable for insurance. The editable [`DiveLog`] overlay
 //!   is what we prepare for SSI.
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::hash::sha256_hex;
 use crate::tracking::TrackingKind;
-use crate::units::{Bar, Celsius, Kilograms, Meters, Seconds};
+use crate::units::{Bar, Celsius, Kilograms, Liters, Meters, Seconds};
 
 /// Stable identity of a logical dive (persisted; survives merges & re-syncs).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -95,6 +95,15 @@ impl Default for GasMix {
     }
 }
 
+/// Tank pressure data for one cylinder over a dive (begin/end + optional meta).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub struct TankData {
+    pub gas_index: Option<u16>,
+    pub volume: Option<Liters>,
+    pub pressure_begin: Option<Bar>,
+    pub pressure_end: Option<Bar>,
+}
+
 /// One profile data point within a [`Segment`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Sample {
@@ -136,6 +145,8 @@ pub struct SourceRecording {
     pub original_artifact: Option<ArtifactRef>,
     /// Gas mixes referenced by `Sample::gas_index`.
     pub gases: Vec<GasMix>,
+    /// Per-cylinder tank pressure data (begin/end), when the source reports it.
+    pub tanks: Vec<TankData>,
     pub segments: Vec<Segment>,
     /// Optional GPS track from a GPS-capable source.
     pub gps_track: Vec<GpsPoint>,
@@ -225,22 +236,21 @@ pub struct DiveSummary {
     pub descent_count: u32,
     pub min_temp: Option<Celsius>,
     pub gases: Vec<GasMix>,
+    /// Primary tank's begin pressure (convenience for SSI mapping).
+    pub pressure_start: Option<Bar>,
+    /// Primary tank's end pressure (convenience for SSI mapping).
+    pub pressure_end: Option<Bar>,
 }
 
 /// Sync status against one upload target.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub enum SyncStatus {
+    #[default]
     NotSynced,
     Synced,
     /// Uploaded, but the local content has since changed.
     Stale,
     Failed(String),
-}
-
-impl Default for SyncStatus {
-    fn default() -> Self {
-        SyncStatus::NotSynced
-    }
 }
 
 /// Per-target sync ledger entry.

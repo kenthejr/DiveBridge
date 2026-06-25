@@ -14,12 +14,17 @@ not add IO, networking, or device code here.
     staleness)
   - `Dive::is_uploadable() -> bool` (true only for `TrackingKind::Tracked`)
 - `SourceRecording` — immutable raw layer (one device, one import). Has
-  `dedup_key()` = `serial::dive_number` or content hash fallback.
+  `dedup_key()` = `serial::dive_number` or content hash fallback. Carries
+  `tanks: Vec<TankData>` (per-cylinder begin/end pressures, when reported).
 - `Segment` — one submersion (profile slice). A recording may hold several,
   split by surface intervals.
 - `Sample`, `GasMix` (`AIR`, `n2_percent`, `is_air`), `DiveSite`, `GpsPoint`,
   `ArtifactRef`, `DeviceId`, `SourceKind`.
+- `TankData` — one cylinder's `gas_index`, `volume`, `pressure_begin`,
+  `pressure_end` (all optional). Held by `SourceRecording.tanks`.
 - `DiveLog`, `DiveSummary`, `Weather`, `Ocean`, `SummaryOverrides`.
+  `DiveSummary` exposes `pressure_start` / `pressure_end` (the primary tank's
+  begin/end, a convenience for SSI mapping).
 - `SyncState` / `SyncRecord` / `SyncStatus`.
 - `TrackingKind { Tracked (default), Training }`.
 - Rules: `RuleMatcher`, `ClassificationRule`, `RuleContext`, `classify()`.

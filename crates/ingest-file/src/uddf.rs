@@ -15,10 +15,10 @@ use quick_xml::Reader;
 
 use crate::core::{
     DeviceId, DiveSummary, GasMix, Sample, Segment, SourceId, SourceKind, SourceRecording,
-    TrackingKind,
+    TankData, TrackingKind,
 };
 use crate::core::{Dive, DiveId, DiveLog, SyncState};
-use crate::units::{Celsius, Meters, Seconds};
+use crate::units::{Bar, Celsius, Meters, Seconds};
 use crate::IngestError;
 
 // --- unit conversion helpers -------------------------------------------------
@@ -51,6 +51,8 @@ struct DiveAcc {
     greatest_depth: Option<f64>,
     average_depth: Option<f64>,
     samples: Vec<Sample>,
+    /// Real (non-zero) tank pressure blocks, already converted to bar.
+    tanks: Vec<TankData>,
 }
 
 // --- public API --------------------------------------------------------------
@@ -83,6 +85,8 @@ pub fn parse_uddf_at(
 
     // Per-mix scratch while inside a `<mix>`.
     let mut cur_mix: Option<MixScratch> = None;
+    // Per-tankdata scratch while inside a `<tankdata>` block.
+    let mut cur_tank: Option<TankScratch> = None;
     // Per-waypoint scratch while inside a `<waypoint>`.
     let mut cur_wp: Option<WaypointScratch> = None;
     // The active gas index, carried forward across waypoints — `<switchmix>` is
@@ -114,11 +118,12 @@ pub fn parse_uddf_at(
                     }
                     "informationbeforedive" => in_before = true,
                     "informationafterdive" => in_after = true,
+                    "tankdata" if in_dive => cur_tank = Some(TankScratch::default()),
                     "waypoint" if in_dive => cur_wp = Some(WaypointScratch::default()),
                     // Leaf elements whose text content we want.
                     "model" | "serialnumber" | "o2" | "he" | "divenumber" | "datetime"
                     | "diveduration" | "greatestdepth" | "averagedepth" | "depth" | "divetime"
-                    | "temperature" | "calculatedpo2" => {
+                    | "temperature" | "calculatedpo2" | "tankpressurebegin" | "tankpressureend" => {
                         text_target = Some(name);
                     }
                     // `<name>` is captured only as a device-computer model fallback.
@@ -153,6 +158,7 @@ pub fn parse_uddf_at(
                     in_after,
                     dives.last_mut(),
                     cur_wp.as_mut(),
+                    cur_tank.as_mut(),
                 );
             }
 
@@ -174,6 +180,15 @@ pub fn parse_uddf_at(
                     }
                     "informationbeforedive" => in_before = false,
                     "informationafterdive" => in_after = false,
+                    "tankdata" => {
+                        // The Perdix emits ~6 tankdata blocks; only the populated
+                        // ones are real. Skip all-zero (both begin and end == 0).
+                        if let (Some(tank), Some(acc)) = (cur_tank.take(), dives.last_mut()) {
+                            if let Some(data) = tank.into_tank_data() {
+                                acc.tanks.push(data);
+                            }
+                        }
+                    }
                     "dive" => in_dive = false,
                     "waypoint" => {
                         if let (Some(wp), Some(acc)) = (cur_wp.take(), dives.last_mut()) {
@@ -215,6 +230,7 @@ pub fn parse_uddf_at(
             // TODO: the store writes verbatim bytes later and fills this in.
             original_artifact: None,
             gases: gases.clone(),
+            tanks: acc.tanks.clone(),
             // TODO: surface-event splitting (depth < 0.5 m for > 20 s) will turn
             // this single segment into several; one Segment per <dive> for now.
             segments: vec![segment],
@@ -222,11 +238,6 @@ pub fn parse_uddf_at(
         };
         out.push(rec);
     }
-
-    // TODO: tankdata <tankpressurebegin>/<tankpressureend> (Pascals → bar) have
-    // no home in frozen core (SourceRecording has no tank begin/end, and these
-    // waypoints carry no per-sample pressure). Left unmapped — Round-2/core
-    // revision candidate. Sample.tank_pressure is therefore None throughout.
 
     Ok(out)
 }
@@ -291,6 +302,11 @@ fn derive_summary(src: &SourceRecording) -> DiveSummary {
         .reduce(f64::min)
         .map(Celsius);
 
+    // Surface the primary (first) tank's begin/end pressures for SSI mapping.
+    let primary_tank = src.tanks.first();
+    let pressure_start = primary_tank.and_then(|t| t.pressure_begin);
+    let pressure_end = primary_tank.and_then(|t| t.pressure_end);
+
     DiveSummary {
         start,
         // total_runtime == bottom time for now (no surface intervals split yet).
@@ -301,6 +317,8 @@ fn derive_summary(src: &SourceRecording) -> DiveSummary {
         descent_count: segments.len() as u32,
         min_temp,
         gases: src.gases.clone(),
+        pressure_start,
+        pressure_end,
     }
 }
 
@@ -345,6 +363,31 @@ impl MixScratch {
             o2: 0.0,
             he: 0.0,
         }
+    }
+}
+
+/// Scratch for one `<tankdata>` block, holding raw Pascal pressures.
+#[derive(Default)]
+struct TankScratch {
+    begin_pa: Option<f64>,
+    end_pa: Option<f64>,
+}
+
+impl TankScratch {
+    /// Convert to a `TankData` (Pa → bar), or `None` for an all-zero block.
+    /// The Perdix pads with empty blocks; only populated ones are real.
+    fn into_tank_data(self) -> Option<TankData> {
+        let begin = self.begin_pa.unwrap_or(0.0);
+        let end = self.end_pa.unwrap_or(0.0);
+        if begin == 0.0 && end == 0.0 {
+            return None;
+        }
+        Some(TankData {
+            gas_index: None,
+            volume: None,
+            pressure_begin: Some(Bar(pa_to_bar(begin))),
+            pressure_end: Some(Bar(pa_to_bar(end))),
+        })
     }
 }
 
@@ -409,6 +452,7 @@ fn apply_text(
     in_after: bool,
     dive: Option<&mut DiveAcc>,
     wp: Option<&mut WaypointScratch>,
+    tank: Option<&mut TankScratch>,
 ) {
     match target {
         "model" if in_divecomputer => device.model = Some(text.to_string()),
@@ -468,6 +512,18 @@ fn apply_text(
         "calculatedpo2" => {
             if let Some(w) = wp {
                 w.ppo2 = parse_f64_opt(text);
+            }
+        }
+        // Tank pressures are Pascals (scientific notation possible). Conversion
+        // to bar happens when the block closes, so the zero-check is in Pascals.
+        "tankpressurebegin" => {
+            if let Some(t) = tank {
+                t.begin_pa = parse_f64_opt(text);
+            }
+        }
+        "tankpressureend" => {
+            if let Some(t) = tank {
+                t.end_pa = parse_f64_opt(text);
             }
         }
         _ => {}

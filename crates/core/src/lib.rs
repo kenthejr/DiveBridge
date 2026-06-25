@@ -33,6 +33,7 @@ mod tests {
             computer_dive_number: Some(42),
             original_artifact: None,
             gases: vec![GasMix::AIR],
+            tanks: vec![],
             segments: vec![Segment {
                 start,
                 duration: Seconds(1800),
@@ -57,6 +58,8 @@ mod tests {
                 descent_count: 1,
                 min_temp: Some(Celsius(18.0)),
                 gases: vec![GasMix::AIR],
+                pressure_start: None,
+                pressure_end: None,
             },
             log: DiveLog {
                 site,
@@ -112,6 +115,23 @@ mod tests {
             site: None,
         };
         assert_eq!(classify(&rules, &ctx2).tracking, None);
+    }
+
+    #[test]
+    fn tank_data_round_trips_through_serde() {
+        let tank = TankData {
+            gas_index: Some(0),
+            volume: Some(Liters(12.0)),
+            pressure_begin: Some(Bar(194.98)),
+            pressure_end: Some(Bar(69.98)),
+        };
+        let json = serde_json::to_string(&tank).unwrap();
+        let back: TankData = serde_json::from_str(&json).unwrap();
+        assert_eq!(tank, back);
+        assert_eq!(back.gas_index, Some(0));
+        assert_eq!(back.volume, Some(Liters(12.0)));
+        assert_eq!(back.pressure_begin, Some(Bar(194.98)));
+        assert_eq!(back.pressure_end, Some(Bar(69.98)));
     }
 
     #[test]

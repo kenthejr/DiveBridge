@@ -32,6 +32,31 @@ fn parses_perdix2_into_one_recording() {
 }
 
 #[test]
+fn tankdata_keeps_only_the_real_block() {
+    // The Perdix emits ~6 <tankdata> blocks; all but the first are all-zero pads
+    // and must be skipped. The real one carries Pascal pressures.
+    let sources = parse_uddf(PERDIX2).expect("perdix2 should parse");
+    let tanks = &sources[0].tanks;
+    assert_eq!(tanks.len(), 1, "only the populated tankdata block is kept");
+
+    let begin = tanks[0]
+        .pressure_begin
+        .expect("real tank has begin pressure");
+    let end = tanks[0].pressure_end.expect("real tank has end pressure");
+    // 1.949838E+07 Pa => ~194.98 bar; 6998181 Pa => ~69.98 bar.
+    assert!(
+        (begin.0 - 194.98).abs() < 0.1,
+        "expected ~194.98 bar begin, got {}",
+        begin.0
+    );
+    assert!(
+        (end.0 - 69.98).abs() < 0.1,
+        "expected ~69.98 bar end, got {}",
+        end.0
+    );
+}
+
+#[test]
 fn first_waypoint_temperature_kelvin_to_celsius() {
     let sources = parse_uddf(PERDIX2).expect("perdix2 should parse");
     let first = sources[0].segments[0].samples[0];
@@ -83,6 +108,17 @@ fn to_dives_builds_one_tracked_dive() {
     assert_eq!(dive.id.0, "A3B6F031::42");
     // primary_source resolves back to the lone source.
     assert!(dive.primary().is_some());
+
+    // Primary tank's begin pressure is surfaced on the summary for SSI mapping.
+    let pressure_start = dive
+        .summary
+        .pressure_start
+        .expect("summary carries the primary tank begin pressure");
+    assert!(
+        (pressure_start.0 - 194.98).abs() < 0.1,
+        "summary pressure_start was {}",
+        pressure_start.0
+    );
 }
 
 #[test]
