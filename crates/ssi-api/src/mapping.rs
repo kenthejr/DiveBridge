@@ -77,6 +77,12 @@ fn fmt_num(v: f64) -> String {
     }
 }
 
+/// Round to one decimal place — SSI's metric fields (depth, temp, vis, weight)
+/// are entered at 0.1 resolution, so we avoid emitting raw float noise.
+fn round1(v: f64) -> f64 {
+    (v * 10.0).round() / 10.0
+}
+
 /// Build the ordered list of `(name, value)` form fields for an SSI create-dive
 /// request. Pure: no IO, no clock, fully determined by `dive` + `ctx`.
 ///
@@ -102,18 +108,18 @@ pub fn build_create_form(
     // --- Bottom time (minutes, rounded) ---
     let divetime = s.total_bottom_time.minutes().round() as i64;
 
-    // --- Depth ---
-    let depth_m = s.max_depth.0;
+    // --- Depth (metric to 0.1 m) ---
+    let depth_m = round1(s.max_depth.0);
     let depth_ft = m_to_ft(depth_m);
-    let avg_depth_m = s.avg_depth.map(|d| d.0);
+    let avg_depth_m = s.avg_depth.map(|d| round1(d.0));
 
-    // --- Temperatures ---
-    let watertemp_c = s.min_temp.map(|c| c.0);
-    let airtemp_c = log.weather.as_ref().and_then(|w| w.air_temp_c);
+    // --- Temperatures (0.1 °C) ---
+    let watertemp_c = s.min_temp.map(|c| round1(c.0));
+    let airtemp_c = log.weather.as_ref().and_then(|w| w.air_temp_c).map(round1);
 
-    // --- Pressures ---
-    let pressure_start_bar = s.pressure_start.map(|b| b.0);
-    let pressure_end_bar = s.pressure_end.map(|b| b.0);
+    // --- Pressures (whole bar, as the SSI UI enters them) ---
+    let pressure_start_bar = s.pressure_start.map(|b| b.0.round());
+    let pressure_end_bar = s.pressure_end.map(|b| b.0.round());
 
     // --- Gas / nitrox: primary source's first gas mix ---
     let primary_gas = dive
@@ -127,8 +133,8 @@ pub fn build_create_form(
 
     // --- From the editable DiveLog ---
     let comment = log.notes.clone().unwrap_or_default();
-    let vis_m = log.visibility.map(|v| v.0);
-    let weight_kg = log.weight.map(|w| w.0);
+    let vis_m = log.visibility.map(|v| round1(v.0));
+    let weight_kg = log.weight.map(|w| round1(w.0));
 
     // --- Context defaults ---
     let var_divetype_id = ctx

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "DiveBridge application shell (Tauri v2 — wiring added later)."
+description = "DiveBridge application shell + MVP CLI (Tauri wiring added later)."
 
 [[bin]]
 name = "divebridge"
@@ -12,3 +12,8 @@ path = "src/main.rs"
 
 [dependencies]
 divebridge-core.workspace = true
+divebridge-ingest-file.workspace = true
+divebridge-ssi-api.workspace = true
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true

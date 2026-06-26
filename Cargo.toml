@@ -19,6 +19,10 @@ sha2 = "0.10"
 hex = "0.4"
 thiserror = "2"
 anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # Local crates
 divebridge-core = { path = "crates/core" }
+divebridge-ingest-file = { path = "crates/ingest-file" }
+divebridge-ssi-api = { path = "crates/ssi-api" }
