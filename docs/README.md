@@ -7,6 +7,7 @@ crate's `CONTRACT.md` + `divebridge-core` — not the whole codebase.
 - [ssi-integration.md](ssi-integration.md) — SSI API surface + discovery TODO
 - [parallelization-playbook.md](parallelization-playbook.md) — how we fan out work
 - Domain model — see `crates/core/CONTRACT.md` + `crates/core/src/`
-- Full roadmap — `~/.claude/plans/i-want-to-build-curried-stroustrup.md`
+- Roadmap & locked decisions — [decisions-log.md](decisions-log.md) and the
+  Roadmap section of the top-level [README](../README.md)
 
 Crate contracts: `crates/*/CONTRACT.md`.
