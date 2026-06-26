@@ -11,5 +11,9 @@ divebridge-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-# reqwest = { version = "0.12", features = ["json", "cookies"] }  # added when wiring
-# reqwest_cookie_store, cookie_store                              # session persistence
+chrono.workspace = true
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+form_urlencoded = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
