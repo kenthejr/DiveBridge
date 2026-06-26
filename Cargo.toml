@@ -1,6 +1,4 @@
 # DiveBridge — Cargo workspace
-# (OS folder is still `ssi-uploader`; project/crates are `divebridge`. Folder
-# rename is a deliberate later step — see plan.)
 [workspace]
 resolver = "2"
 members = ["crates/*"]

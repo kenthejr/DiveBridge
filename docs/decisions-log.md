@@ -2,7 +2,7 @@
 
 ## Architecture (approved plan)
 - Rust + Tauri v2 desktop app, SvelteKit UI, macOS, single-user/local. Name:
-  **DiveBridge** (OS folder still `ssi-uploader`; rename deferred).
+  **DiveBridge** (workspace + OS folder both `divebridge`).
 - Cargo workspace of small crates, each with a `CONTRACT.md`; `core` frozen first.
 - Flat-file store (UDDF/JSON), content-hash dedup. No SQLite.
 - Device: pure-Rust Shearwater protocol (no LGPL/FFI), published as a separate
