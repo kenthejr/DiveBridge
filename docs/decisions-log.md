@@ -51,6 +51,14 @@
   `var_*` option tables by fetching `mydivelog/add` with a live session, or from a
   mobile-app capture. See docs/api-capture.md.
 
+## VALIDATED (live submit 2026-06-26)
+- End-to-end proven: UDDF -> core::Dive -> SSI form -> live POST created dive #45.
+- **Dive site is required** for a successful create (only required form field).
+- Success response is indistinguishable from silent rejection (both 200 + redirect)
+  -> ALWAYS verify by read-back of `/mydivelog` (`show/{nr}_{id}_{user}`).
+- `dive_nr` = max+1 auto (Ken approved next-integer). To wire as a feature.
+- PHPSESSID session is sufficient auth for create (no CSRF).
+
 ## Pending (Round 2 — remaining)
 Credential/token storage location (post-testing), sync idempotency on re-upload
 (update vs new), batch-failure UX, and whether to attach the dive-computer profile

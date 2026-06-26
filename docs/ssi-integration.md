@@ -14,6 +14,22 @@ cookie), NOT the `a21.php` app API. Direct submission is viable.
   `odin_user_log_user_master_id`) identifies the user. Obtain it from the profile/
   session (it appears in page context); needed on every create.
 
+## VALIDATED end-to-end (2026-06-26)
+A real dive was created via `mydivelog_18.php` with a PHPSESSID session — dive #45
+(`mydivelog/show/45_25115067_4576988`) appeared in the logbook. Confirmed facts:
+- **A dive site is REQUIRED.** `odin_user_log_dive_sites_id` must be set; it's the
+  only field the add form marks `required` (`myDiveSiteNameInfo`). With it blank the
+  POST returns success-looking output but **silently saves nothing**.
+- **Success response = HTTP 200 with a redirect to `/mydivelog`** (376-byte
+  `<meta refresh>`+`window.location` body). The SAME response is returned on silent
+  rejection, so HTTP status is NOT a reliable success signal — verify by read-back.
+- **Verify / dedupe by read-back:** `GET /mydivelog` lists
+  `mydivelog/show/{dive_nr}_{dive_id}_{user_master_id}`. Next number =
+  `data-currentdivelognr` on the add form (= max+1). Use this for `dive_nr` (Ken is
+  fine with auto next-integer).
+- **Auth:** a `PHPSESSID` cookie alone authorizes the create (no CSRF token, no
+  extra header). `user_master_id` is a hidden field on the add form.
+
 ## Create dive (confirmed) — PRIMARY upload path
 - `POST https://my.divessi.com/code/process/mydivelog_18.php`
   - Content-Type: `application/x-www-form-urlencoded`; **session cookie required**.
