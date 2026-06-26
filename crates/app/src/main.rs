@@ -17,7 +17,11 @@ use divebridge_ingest_file as ingest;
 use divebridge_ssi_api as ssi;
 
 #[derive(Parser)]
-#[command(name = "divebridge", about = "DiveBridge MVP: UDDF -> SSI dive-log mapping")]
+#[command(
+    name = "divebridge",
+    about = "DiveBridge MVP: UDDF -> SSI dive-log mapping"
+)]
+#[command(allow_negative_numbers = true)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -33,6 +37,7 @@ enum Cmd {
     /// Build the SSI create-dive form and print it. No network.
     DryRun(SubmitArgs),
     /// Search SSI dive sites near a coordinate (network, no auth).
+    #[command(allow_negative_numbers = true)]
     Sites {
         lat: f64,
         lon: f64,
@@ -52,14 +57,18 @@ struct SubmitArgs {
     #[arg(long)]
     user_master_id: String,
     /// SSI logbook dive number to assign (your SSI sequence, not the computer's).
+    /// Omit to auto-assign the next number from your logbook at submit time.
     #[arg(long)]
-    dive_nr: u32,
+    dive_nr: Option<u32>,
     /// Which dive in the file to use (0-based) when it holds several.
     #[arg(long, default_value_t = 0)]
     index: usize,
-    /// Resolved SSI dive-site id (the `f` from `sites`).
+    /// Resolved SSI dive-site id (the `f` from `sites`). Takes precedence over --site-name.
     #[arg(long)]
     site_id: Option<String>,
+    /// Resolve the dive site by place name (geocode -> nearest/best SSI site).
+    #[arg(long)]
+    site_name: Option<String>,
     /// Body of water: fresh | salt.
     #[arg(long)]
     bow: Option<String>,
@@ -100,7 +109,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Inspect { uddf } => inspect(&uddf),
-        Cmd::DryRun(args) => dry_run(&args),
+        Cmd::DryRun(args) => dry_run(&args).await,
         Cmd::Sites { lat, lon, span } => sites(lat, lon, span).await,
         Cmd::Submit(args) => submit(&args).await,
     }
@@ -121,7 +130,10 @@ fn inspect(uddf: &PathBuf) -> Result<()> {
         let dev = d.primary().map(|p| &p.device);
         println!("[{i}] {:?}", d.tracking);
         if let Some(dev) = dev {
-            println!("    device : {} {} (sn {})", dev.make, dev.model, dev.serial);
+            println!(
+                "    device : {} {} (sn {})",
+                dev.make, dev.model, dev.serial
+            );
         }
         if let Some(n) = d.primary().and_then(|p| p.computer_dive_number) {
             println!("    comp # : {n}");
@@ -130,7 +142,9 @@ fn inspect(uddf: &PathBuf) -> Result<()> {
         println!(
             "    profile: max {:.1} m, avg {} m, bottom {:.0} min, {} descent(s)",
             s.max_depth.0,
-            s.avg_depth.map(|m| format!("{:.1}", m.0)).unwrap_or_else(|| "—".into()),
+            s.avg_depth
+                .map(|m| format!("{:.1}", m.0))
+                .unwrap_or_else(|| "—".into()),
             s.total_bottom_time.minutes(),
             s.descent_count,
         );
@@ -140,7 +154,13 @@ fn inspect(uddf: &PathBuf) -> Result<()> {
         let gases: Vec<String> = s
             .gases
             .iter()
-            .map(|g| if g.is_air() { "Air".into() } else { format!("EAN{:.0}", g.o2_percent) })
+            .map(|g| {
+                if g.is_air() {
+                    "Air".into()
+                } else {
+                    format!("EAN{:.0}", g.o2_percent)
+                }
+            })
             .collect();
         if !gases.is_empty() {
             println!("    gas    : {}", gases.join(", "));
@@ -151,14 +171,22 @@ fn inspect(uddf: &PathBuf) -> Result<()> {
 }
 
 /// Pick the requested dive and build a SubmitContext from CLI args.
-fn prepare<'a>(args: &SubmitArgs, dives: &'a [Dive]) -> Result<(&'a Dive, ssi::SubmitContext)> {
+///
+/// `dive_nr` and `dive_sites_id` are passed in already resolved (auto dive number
+/// and site-by-name resolution happen in the async callers, before this).
+fn prepare<'a>(
+    args: &SubmitArgs,
+    dives: &'a [Dive],
+    dive_nr: u32,
+    dive_sites_id: Option<String>,
+) -> Result<(&'a Dive, ssi::SubmitContext)> {
     let dive = dives
         .get(args.index)
         .ok_or_else(|| anyhow!("no dive at index {} (file has {})", args.index, dives.len()))?;
     let ctx = ssi::SubmitContext {
         user_master_id: args.user_master_id.clone(),
-        dive_nr: args.dive_nr,
-        dive_sites_id: args.site_id.clone(),
+        dive_nr,
+        dive_sites_id,
         dive_site_bow: args.bow.clone(),
         var_divetype_id: args.divetype_id.clone(),
         var_entry_id: args.entry_id.clone(),
@@ -175,9 +203,44 @@ fn prepare<'a>(args: &SubmitArgs, dives: &'a [Dive]) -> Result<(&'a Dive, ssi::S
     Ok((dive, ctx))
 }
 
-fn dry_run(args: &SubmitArgs) -> Result<()> {
+/// Resolve the dive-site id from args: `--site-id` wins; else resolve `--site-name`
+/// via geocode + SSI search (read-only, no auth). Errors if a name is given but
+/// nothing resolves (a site is REQUIRED for a real submission).
+async fn resolve_site_id(args: &SubmitArgs) -> Result<Option<String>> {
+    if let Some(id) = &args.site_id {
+        return Ok(Some(id.clone()));
+    }
+    let Some(name) = &args.site_name else {
+        return Ok(None);
+    };
+    let client = ssi::SsiClient::new().map_err(|e| anyhow!(e))?;
+    match client
+        .resolve_site_by_name(name)
+        .await
+        .map_err(|e| anyhow!(e))?
+    {
+        Some(marker) => {
+            println!(
+                "resolved site '{}' -> {} (id {})",
+                name, marker.name, marker.id
+            );
+            Ok(Some(marker.id))
+        }
+        None => Err(anyhow!(
+            "could not resolve a dive site for '{name}' (a dive site is required). \
+             Try `sites <lat> <lon>` to find one and pass --site-id."
+        )),
+    }
+}
+
+async fn dry_run(args: &SubmitArgs) -> Result<()> {
     let dives = load_dives(&args.uddf)?;
-    let (dive, ctx) = prepare(args, &dives)?;
+    let dive_sites_id = resolve_site_id(args).await?;
+    let dive_nr = args.dive_nr.unwrap_or(0);
+    if args.dive_nr.is_none() {
+        println!("(dive_nr auto-assigned at submit)");
+    }
+    let (dive, ctx) = prepare(args, &dives, dive_nr, dive_sites_id)?;
     let fields = ssi::build_create_form(dive, &ctx).map_err(|e| anyhow!(e))?;
 
     println!("Populated fields (non-empty):");
@@ -192,14 +255,22 @@ fn dry_run(args: &SubmitArgs) -> Result<()> {
 
 async fn sites(lat: f64, lon: f64, span: f64) -> Result<()> {
     let client = ssi::SsiClient::new().map_err(|e| anyhow!(e))?;
-    let markers = client.search_dive_sites(lat, lon, span).await.map_err(|e| anyhow!(e))?;
+    let markers = client
+        .search_dive_sites(lat, lon, span)
+        .await
+        .map_err(|e| anyhow!(e))?;
     if markers.is_empty() {
-        println!("No SSI dive sites within {span}° of {lat},{lon}. Widen --span or submit site-blank.");
+        println!(
+            "No SSI dive sites within {span}° of {lat},{lon}. Widen --span or submit site-blank."
+        );
         return Ok(());
     }
     println!("{} site(s) near {lat},{lon}:", markers.len());
     for m in &markers {
-        println!("  id {:<10} {:<32} ({:.4},{:.4})", m.id, m.name, m.lat, m.lon);
+        println!(
+            "  id {:<10} {:<32} ({:.4},{:.4})",
+            m.id, m.name, m.lat, m.lon
+        );
     }
     Ok(())
 }
@@ -210,22 +281,40 @@ async fn submit(args: &SubmitArgs) -> Result<()> {
         .as_deref()
         .ok_or_else(|| anyhow!("submit requires --phpsessid <session cookie>"))?;
     if !args.yes {
-        return Err(anyhow!("refusing to POST without --yes (run `dry-run` first to review)"));
+        return Err(anyhow!(
+            "refusing to POST without --yes (run `dry-run` first to review)"
+        ));
     }
     let dives = load_dives(&args.uddf)?;
-    let (dive, ctx) = prepare(args, &dives)?;
+    let dive_sites_id = resolve_site_id(args).await?;
+
+    // Build the auth'd client up front — it both fetches the next dive number and
+    // POSTs the create, so the same session is reused.
+    let client = ssi::SsiClient::with_phpsessid(sid).map_err(|e| anyhow!(e))?;
+    let dive_nr = match args.dive_nr {
+        Some(n) => n,
+        None => {
+            let n = client.next_dive_nr().await.map_err(|e| anyhow!(e))?;
+            println!("auto dive_nr = {n}");
+            n
+        }
+    };
+
+    let (dive, ctx) = prepare(args, &dives, dive_nr, dive_sites_id)?;
     let fields = ssi::build_create_form(dive, &ctx).map_err(|e| anyhow!(e))?;
 
     let depth = dive.summary.max_depth;
     println!(
         "Submitting dive_nr {} (max {:.1} m) to SSI as user {} ...",
-        args.dive_nr,
+        dive_nr,
         depth_m(depth),
         args.user_master_id
     );
-    let client = ssi::SsiClient::with_phpsessid(sid).map_err(|e| anyhow!(e))?;
     let outcome = client.create_dive(&fields).await.map_err(|e| anyhow!(e))?;
-    println!("-> HTTP {} (body {} bytes)", outcome.status, outcome.body_len);
+    println!(
+        "-> HTTP {} (body {} bytes)",
+        outcome.status, outcome.body_len
+    );
     println!("Verify in your SSI logbook; delete the test dive if needed.");
     Ok(())
 }

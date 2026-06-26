@@ -21,7 +21,9 @@ pub use divebridge_core as core;
 mod client;
 mod mapping;
 
-pub use client::{CreateOutcome, DiveSiteMarker, SsiClient};
+pub use client::{
+    best_site_match, parse_geocode, parse_next_dive_nr, CreateOutcome, DiveSiteMarker, SsiClient,
+};
 pub use mapping::{build_create_form, encode_form, SubmitContext};
 
 /// Login (JSON `{auth:"Portal", username, password}`) → sets session cookies.
@@ -33,6 +35,12 @@ pub const SSI_VALIDATE_DIVE_NR_URL: &str =
     "https://my.divessi.com/code/process/ajax_divelog_validate_dive_number.php";
 /// Dive-site geo search (bounding box) → site ids.
 pub const SSI_DIVE_SITE_GEO_URL: &str = "https://my.divessi.com/code/geo/dive_site.json.sd.php";
+/// Logbook index page (`GET`) — lists `mydivelog/show/{nr}_{id}_{user}` entries.
+pub const SSI_LOGBOOK_URL: &str = "https://my.divessi.com/mydivelog";
+/// Add-dive form (`GET`) — carries `data-currentdivelognr` (= next dive number).
+pub const SSI_ADD_FORM_URL: &str = "https://my.divessi.com/mydivelog/add";
+/// FREE Open-Meteo geocoder (no API key) — turns a place name into coordinates.
+pub const OPEN_METEO_GEOCODE_URL: &str = "https://geocoding-api.open-meteo.com/v1/search";
 /// Constant `source` value the add-dive form posts.
 pub const SSI_CREATE_SOURCE: &str = "mydl_18_add_AddDiveOnline";
 

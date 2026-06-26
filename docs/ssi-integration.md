@@ -30,6 +30,26 @@ A real dive was created via `mydivelog_18.php` with a PHPSESSID session — dive
 - **Auth:** a `PHPSESSID` cookie alone authorizes the create (no CSRF token, no
   extra header). `user_master_id` is a hidden field on the add form.
 
+## MVP conveniences (implemented in `ssi-api` + `app`)
+- **Auto next dive number.** `SsiClient::next_dive_nr()` GETs the add form
+  (`https://my.divessi.com/mydivelog/add`) and parses the next number via the pure
+  `parse_next_dive_nr(html)`: it prefers `data-currentdivelognr="N"` (SSI already
+  sets this to `max + 1`), else falls back to `max(mydivelog/show/{nr}_…) + 1` from
+  the logbook (`https://my.divessi.com/mydivelog`). The CLI auto-assigns when
+  `--dive-nr` is omitted (`submit` resolves it live and logs `auto dive_nr = N`;
+  `dry-run` uses `0` and prints a note).
+- **Dive-site resolution by name.** `SsiClient::geocode(place)` uses the FREE
+  Open-Meteo geocoder (`https://geocoding-api.open-meteo.com/v1/search`, no key) →
+  `(lat, lon, name)`. `resolve_site_by_name(name)` geocodes, then
+  `search_dive_sites(lat, lon, 0.25)`, then picks the best marker with the pure
+  `best_site_match(query, center, markers)`: **exact case-insensitive name** wins;
+  else **case-insensitive substring** (shortest name preferred); else **nearest**
+  marker to the geocoded center (haversine). The CLI exposes `--site-name`
+  (`--site-id` still wins); if nothing resolves it errors rather than submitting
+  site-blank (a site is required). This is read-only (no auth).
+- **Note:** the logbook UI sorts entries by **date, not dive number**, so a newly
+  assigned `dive_nr` may not appear last in the list.
+
 ## Create dive (confirmed) — PRIMARY upload path
 - `POST https://my.divessi.com/code/process/mydivelog_18.php`
   - Content-Type: `application/x-www-form-urlencoded`; **session cookie required**.
